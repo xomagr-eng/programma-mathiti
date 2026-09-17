@@ -1,0 +1,21 @@
+{
+  "name": "Το Πρόγραμμά μου",
+  "short_name": "Πρόγραμμα",
+  "description": "Πρόγραμμα σχολείου, φροντιστηρίων, δραστηριοτήτων, εργασιών & υπενθυμίσεις.",
+  "lang": "el",
+  "dir": "ltr",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "fullscreen",
+  "display_override": ["fullscreen", "standalone", "minimal-ui"],
+  "orientation": "portrait",
+  "background_color": "#4f46e5",
+  "theme_color": "#4f46e5",
+  "categories": ["education", "productivity"],
+  "icons": [
+    { "src": "./icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "./icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "./icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "./icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

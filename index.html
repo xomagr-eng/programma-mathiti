@@ -171,6 +171,40 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--brand)}
 .linkrow:last-child{border-bottom:none}
 hr.sep{border:none;border-top:1px solid var(--line);margin:14px 0}
 .dueflag{font-weight:800}
+/* next-up / now */
+.nextup{background:linear-gradient(135deg,var(--brand),var(--brand2));color:#fff;border-radius:16px;
+  padding:14px 16px;margin-bottom:14px;box-shadow:var(--shadow);display:flex;align-items:center;gap:12px}
+.nextup .ic{font-size:26px}
+.nextup .lbl{font-size:11.5px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;opacity:.9}
+.nextup .nm{font-size:17px;font-weight:800;margin-top:1px}
+.nextup .mt{font-size:12.5px;opacity:.95;margin-top:2px}
+.slot.now .body{box-shadow:0 0 0 3px var(--card),0 0 0 6px var(--brand)}
+.nowbadge{position:absolute;top:8px;left:12px;background:#fff;color:var(--brand);font-size:10px;
+  font-weight:900;padding:2px 8px;border-radius:999px;letter-spacing:.5px;
+  animation:pulse 1.6s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.55}}
+@media (prefers-reduced-motion:reduce){.nowbadge{animation:none}}
+/* ===== Tablet / landscape (wide) layout ===== */
+@media (min-width:760px){
+  body{padding-bottom:24px}
+  .app{max-width:1000px;padding-left:84px}
+  nav.tabbar{flex-direction:column;justify-content:flex-start;gap:8px;top:0;bottom:auto;
+    height:100vh;height:100dvh;width:84px;max-width:none;margin:0;
+    left:max(0px,calc(50% - 500px));right:auto;
+    border-top:none;border-right:1px solid var(--line);padding:18px 6px}
+  .tab{flex:0 0 auto;padding:11px 0;border-radius:12px}
+  .tab.active{background:var(--card2)}
+  .fab{right:max(20px,calc(50% - 500px + 20px));bottom:28px}
+  .wide-cols{display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start}
+  #weekSlots,#costList{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  #weekSlots .slot{margin-bottom:0}
+  #costList .card{margin-bottom:0}
+}
+/* short landscape phones: compact header */
+@media (orientation:landscape) and (max-height:460px){
+  header{padding-top:8px;padding-bottom:10px}
+  .htitle{font-size:16px}.hsub{font-size:11px}.hcredit{margin-top:4px}
+}
 </style>
 </head>
 <body>
@@ -196,11 +230,18 @@ hr.sep{border:none;border-top:1px solid var(--line);margin:14px 0}
         <div class="stat"><div class="n" id="stTasks">0</div><div class="l">Εκκρεμείς εργασίες</div></div>
       </div>
 
-      <h2 class="sec">📅 Το πρόγραμμα σήμερα</h2>
-      <div id="todaySlots"></div>
+      <div id="nextUp"></div>
 
-      <h2 class="sec" style="margin-top:18px">⏰ Επόμενες υπενθυμίσεις</h2>
-      <div id="todayReminders"></div>
+      <div class="wide-cols">
+        <div>
+          <h2 class="sec">📅 Το πρόγραμμα σήμερα</h2>
+          <div id="todaySlots"></div>
+        </div>
+        <div>
+          <h2 class="sec">⏰ Επόμενες υπενθυμίσεις</h2>
+          <div id="todayReminders"></div>
+        </div>
+      </div>
     </section>
 
     <!-- ΠΡΟΓΡΑΜΜΑ -->
@@ -413,6 +454,8 @@ const DAYS=["Κυριακή","Δευτέρα","Τρίτη","Τετάρτη","Π�
 const DAYS_SHORT=["Κυρ","Δευ","Τρί","Τετ","Πέμ","Παρ","Σάβ"];
 const PALETTE=["#4f46e5","#ec4899","#0ea5e9","#16a34a","#f59e0b","#ef4444","#8b5cf6","#14b8a6","#f43f5e","#64748b"];
 const TYPE_LABEL={school:"Σχολείο",frontistirio:"Φροντιστήριο",activity:"Δραστηριότητα"};
+const TYPE_ICON={school:"🏫",frontistirio:"📖",activity:"⚽"};
+function hm(t){const p=(t||'0:0').split(':');return (+p[0])*60+(+p[1]);}
 const TASK_LABEL={homework:"Εργασία",exam:"Διαγώνισμα",project:"Project"};
 const TASK_COLOR={homework:"#0ea5e9",exam:"#ef4444",project:"#8b5cf6"};
 
@@ -485,9 +528,25 @@ function renderToday(){
   document.getElementById('stMath').textContent=slots.length;
   document.getElementById('stTasks').textContent=pend.length;
 
+  // now / next class
+  const nowM=h*60+d.getMinutes();
+  let cur=null,nxt=null;
+  slots.forEach(s=>{const st=hm(s.start),en=hm(s.end||s.start);
+    if(nowM>=st&&nowM<en)cur=s;
+    else if(st>nowM&&(!nxt||st<hm(nxt.start)))nxt=s;});
+  const nu=document.getElementById('nextUp');
+  if(cur){nu.innerHTML=`<div class="nextup"><div class="ic">${TYPE_ICON[cur.type]||'📚'}</div>
+    <div class="grow"><div class="lbl">Τώρα</div><div class="nm">${esc(cur.name)}</div>
+    <div class="mt">έως ${cur.end||''}${cur.teacher?' · '+esc(cur.teacher):''}</div></div></div>`;}
+  else if(nxt){const mins=hm(nxt.start)-nowM;const inTxt=mins<=60?('σε '+mins+"′"):('στις '+nxt.start);
+    nu.innerHTML=`<div class="nextup"><div class="ic">${TYPE_ICON[nxt.type]||'📚'}</div>
+    <div class="grow"><div class="lbl">Επόμενο ${inTxt}</div><div class="nm">${esc(nxt.name)}</div>
+    <div class="mt">${nxt.start}–${nxt.end||''}${nxt.teacher?' · '+esc(nxt.teacher):''}</div></div></div>`;}
+  else nu.innerHTML='';
+
   const cont=document.getElementById('todaySlots');
   if(!slots.length){cont.innerHTML='<div class="card empty"><div class="big">🎉</div>Δεν υπάρχουν μαθήματα σήμερα!</div>';}
-  else cont.innerHTML=slots.map(slotHTML).join('');
+  else cont.innerHTML=slots.map(s=>slotHTML(s,cur&&s.id===cur.id)).join('');
   bindSlotEdit(cont);
 
   // upcoming reminders + task deadlines (next 7d)
@@ -524,10 +583,10 @@ function nextOccur(r){
   if(r.repeat==='monthly'){let d=new Date(base);while(d<now)d.setMonth(d.getMonth()+1);return d;}
   return null;
 }
-function slotHTML(s){return `
-  <div class="slot"><div class="time">${s.start}<br><span style="opacity:.6">${s.end||''}</span></div>
+function slotHTML(s,now){return `
+  <div class="slot${now?' now':''}"><div class="time">${s.start}<br><span style="opacity:.6">${s.end||''}</span></div>
   <div class="body" data-id="${s.id}" style="background:linear-gradient(135deg,${s.color},${shade(s.color,-18)})">
-    <span class="edit">✎</span>
+    ${now?'<span class="nowbadge">ΤΩΡΑ</span>':'<span class="edit">✎</span>'}
     <div class="t">${esc(s.name)}</div>
     <div class="s">${TYPE_LABEL[s.type]||''}${s.teacher?' · '+esc(s.teacher):''}${s.cost>0?' · '+money(s.cost)+'/ώρα':''}</div>
   </div></div>`;}
@@ -544,7 +603,7 @@ function renderWeek(){
   const slots=DB.slots.filter(s=>s.day===selWeekDay).sort((a,b)=>a.start.localeCompare(b.start));
   const c=document.getElementById('weekSlots');
   if(!slots.length)c.innerHTML='<div class="card empty"><div class="big">📭</div>Κενή ημέρα. Πάτα ＋ για προσθήκη.</div>';
-  else c.innerHTML=slots.map(slotHTML).join('');
+  else c.innerHTML=slots.map(s=>slotHTML(s)).join('');
   bindSlotEdit(c);
 }
 
@@ -865,6 +924,8 @@ function tick(){
     const due=new Date(t.due+"T"+(t.time||"08:00"));const k='task_'+t.id+'_'+t.due;
     if(now>=due&&now<new Date(due.getTime()+60000)&&!fired[k]){fired[k]=1;saveFired();
       notify(TASK_LABEL[t.type]+': '+t.name,t.subject||'Λήγει τώρα');}});
+  // keep "Τώρα / Επόμενο" fresh όταν είμαστε στο «Σήμερα»
+  try{if(document.getElementById('sec-today').classList.contains('active'))renderToday();}catch(e){}
 }
 setInterval(tick,30000);
 

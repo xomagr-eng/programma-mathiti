@@ -211,6 +211,23 @@ hr.sep{border:none;border-top:1px solid var(--line);margin:14px 0}
   #weekSlots .slot{margin-bottom:0}
   #costList .card{margin-bottom:0}
 }
+/* print */
+#printSheet{display:none}
+@media print{
+  @page{size:landscape;margin:12mm}
+  body{padding:0 !important;background:#fff !important}
+  .app,nav.tabbar,.fab,.modal{display:none !important}
+  #printSheet{display:block !important;color:#000;font-family:system-ui,Arial,sans-serif}
+  #printSheet h1{font-size:20px;margin:0 0 2px}
+  #printSheet .psub{font-size:12px;color:#444;margin-bottom:12px}
+  #printSheet table{width:100%;border-collapse:collapse;table-layout:fixed}
+  #printSheet th,#printSheet td{border:1px solid #bbb;padding:6px;vertical-align:top;font-size:11px}
+  #printSheet th{background:#eee;font-size:12px}
+  #printSheet .pl{margin-bottom:5px;padding-left:7px;border-left:4px solid #888}
+  #printSheet .pt{font-weight:700}
+  #printSheet .pm{color:#555;font-size:10px}
+  #printSheet .pfoot{margin-top:10px;font-size:10px;color:#666;text-align:right}
+}
 /* short landscape phones: compact header */
 @media (orientation:landscape) and (max-height:460px){
   header{padding-top:8px;padding-bottom:10px}
@@ -226,6 +243,7 @@ hr.sep{border:none;border-top:1px solid var(--line);margin:14px 0}
         <div class="htitle" id="hTitle">Καλημέρα! 👋</div>
         <div class="hsub" id="hSub">Σήμερα</div>
       </div>
+      <button class="iconbtn" id="profileBtn" title="Προφίλ">👤</button>
       <button class="iconbtn" id="colorBtn" title="Χρώμα">🎨</button>
       <button class="iconbtn" id="themeBtn" title="Θέμα">🌙</button>
       <button class="iconbtn" id="bellBtn" title="Ειδοποιήσεις">🔔</button>
@@ -260,8 +278,9 @@ hr.sep{border:none;border-top:1px solid var(--line);margin:14px 0}
       <h2 class="sec">🗓️ Εβδομαδιαίο Πρόγραμμα</h2>
       <div class="card" id="weekStats" style="background:linear-gradient(135deg,var(--brand),var(--brand2));color:#fff;border:none"></div>
       <div class="daybar" id="dayBar"></div>
-      <div class="row" style="justify-content:flex-end;margin:-2px 0 8px">
-        <button class="btn sm" id="copyDayBtn">📋 Αντιγραφή ημέρας σε άλλη</button>
+      <div class="row" style="justify-content:flex-end;gap:8px;margin:-2px 0 8px">
+        <button class="btn sm" id="printBtn">🖨️ Εκτύπωση / PDF</button>
+        <button class="btn sm" id="copyDayBtn">📋 Αντιγραφή ημέρας</button>
       </div>
       <div id="weekSlots"></div>
     </section>
@@ -331,8 +350,9 @@ hr.sep{border:none;border-top:1px solid var(--line);margin:14px 0}
           </select>
         </div>
         <div class="linkrow">
-          <div style="flex:1"><div style="font-weight:700">Όνομα μαθητή</div></div>
-          <input id="studentName" placeholder="π.χ. Γιώργος" style="width:150px">
+          <div style="flex:1"><div style="font-weight:700">Όνομα ενεργού προφίλ</div>
+            <div class="muted" style="font-size:12px">Διαχείριση προφίλ από το 👤 πάνω</div></div>
+          <input id="studentName" placeholder="π.χ. Γιώργος" style="width:130px">
         </div>
         <div class="linkrow">
           <div><div style="font-weight:700">Πλήρης οθόνη</div>
@@ -469,6 +489,21 @@ hr.sep{border:none;border-top:1px solid var(--line);margin:14px 0}
   </div>
 </div>
 
+<!-- MODAL: profiles -->
+<div class="modal" id="mProfile">
+  <div class="backdrop" data-close></div>
+  <div class="sheet">
+    <h3>👤 Προφίλ παιδιών</h3>
+    <div id="profileList"></div>
+    <hr class="sep">
+    <label>Προσθήκη νέου προφίλ</label>
+    <div class="row" style="gap:8px">
+      <input id="newProfileName" placeholder="Όνομα παιδιού" class="grow">
+      <button class="btn primary" id="addProfile">➕</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL: app color -->
 <div class="modal" id="mColor">
   <div class="backdrop" data-close></div>
@@ -531,6 +566,8 @@ hr.sep{border:none;border-top:1px solid var(--line);margin:14px 0}
   </div>
 </div>
 
+<div id="printSheet" aria-hidden="true"></div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -563,7 +600,7 @@ const LS="progmathiti_v1";
 // safe storage wrappers (private mode / data: URLs disable localStorage)
 const store={get(k){try{return localStorage.getItem(k);}catch(e){return null;}},
   set(k,v){try{localStorage.setItem(k,v);}catch(e){}}};
-let DB={slots:[],tasks:[],reminders:[],grades:[],holidays:[],settings:{preMin:15,name:"",theme:"light"}};
+let DB={slots:[],tasks:[],reminders:[],grades:[],holidays:[],profiles:[],activeProfile:null,settings:{preMin:15,name:"",theme:"light"}};
 let selWeekDay=new Date().getDay();
 let taskF="all";
 let editingSlot=null, editingTask=null, editingRem=null, slotType="school", slotColor=PALETTE[0], taskType="homework";
@@ -584,7 +621,20 @@ function money(n){return (Math.round(n*100)/100).toLocaleString('el-GR',{minimum
 function load(){try{const d=JSON.parse(store.get(LS));if(d)DB=Object.assign(DB,d);}catch(e){}
   DB.settings=Object.assign({preMin:15,name:"",theme:"light",accent:0},DB.settings||{});
   if(!DB.grades)DB.grades=[];if(!DB.holidays)DB.holidays=[];
-  (DB.slots||[]).forEach(s=>{if(!s.gid)s.gid=s.id;});}
+  (DB.slots||[]).forEach(s=>{if(!s.gid)s.gid=s.id;});
+  // profiles migration
+  if(!DB.profiles||!DB.profiles.length){
+    const pid=uid();
+    DB.profiles=[{id:pid,name:DB.settings.name||'Μαθητής',emoji:'🎒'}];
+    DB.activeProfile=pid;
+    ['slots','tasks','reminders','grades'].forEach(k=>(DB[k]||[]).forEach(x=>{if(!x.pid)x.pid=pid;}));
+  }
+  if(!DB.activeProfile||!DB.profiles.some(p=>p.id===DB.activeProfile))DB.activeProfile=DB.profiles[0].id;}
+function sP(){return DB.slots.filter(s=>s.pid===DB.activeProfile);}
+function tP(){return DB.tasks.filter(t=>t.pid===DB.activeProfile);}
+function rP(){return DB.reminders.filter(r=>r.pid===DB.activeProfile);}
+function gP(){return DB.grades.filter(g=>g.pid===DB.activeProfile);}
+function activeProf(){return DB.profiles.find(p=>p.id===DB.activeProfile)||DB.profiles[0];}
 function save(){store.set(LS,JSON.stringify(DB));}
 function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,6);}
 function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');
@@ -606,14 +656,14 @@ function dueColor(t){if(t.done)return"var(--ok)";const n=daysUntil(t.due);
 /* ---------- render: TODAY ---------- */
 function renderToday(){
   const d=new Date(),dow=d.getDay();
-  const name=DB.settings.name?(", "+DB.settings.name):"";
+  const pn=activeProf()?activeProf().name:'';const name=pn?(", "+pn):"";
   const h=d.getHours();
   const greet=h<12?"Καλημέρα":h<18?"Καλησπέρα":"Καληνύχτα";
   document.getElementById('hTitle').textContent=greet+name+" 👋";
   document.getElementById('hSub').textContent=DAYS[dow]+" "+d.toLocaleDateString('el-GR',{day:'numeric',month:'long'});
 
-  const slots=DB.slots.filter(s=>s.day===dow).sort((a,b)=>a.start.localeCompare(b.start));
-  const pend=DB.tasks.filter(t=>!t.done);
+  const slots=sP().filter(s=>s.day===dow).sort((a,b)=>a.start.localeCompare(b.start));
+  const pend=tP().filter(t=>!t.done);
   document.getElementById('stMath').textContent=slots.length;
   document.getElementById('stTasks').textContent=pend.length;
 
@@ -649,11 +699,11 @@ function renderToday(){
 }
 function upcomingReminders(limit){
   const out=[];const now=new Date();
-  DB.tasks.filter(t=>!t.done&&t.due).forEach(t=>{
+  tP().filter(t=>!t.done&&t.due).forEach(t=>{
     const n=daysUntil(t.due);if(n>=0&&n<=7)out.push({sortT:new Date(t.due+"T"+(t.time||"08:00")).getTime(),
       icon:t.type==='exam'?'📊':'📝',title:t.name,sub:t.subject||TASK_LABEL[t.type],when:dueText(t),color:dueColor(t)});
   });
-  DB.reminders.forEach(r=>{const nx=nextOccur(r);if(nx)out.push({sortT:nx.getTime(),icon:'🔔',title:r.name,
+  rP().forEach(r=>{const nx=nextOccur(r);if(nx)out.push({sortT:nx.getTime(),icon:'🔔',title:r.name,
     sub:repeatLabel(r.repeat),when:whenText(nx),color:'var(--brand)'});});
   return out.sort((a,b)=>a.sortT-b.sortT).slice(0,limit);
 }
@@ -685,25 +735,26 @@ function bindSlotEdit(cont){cont.querySelectorAll('.body[data-id]').forEach(el=>
 /* ---------- render: WEEK ---------- */
 function renderWeekStats(){
   const el=document.getElementById('weekStats');if(!el)return;
-  let totH=0,perDay={};
-  DB.slots.forEach(s=>{const h=hoursBetween(s.start,s.end);totH+=h;perDay[s.day]=(perDay[s.day]||0)+h;});
+  let totH=0,perDay={};const all=sP();
+  all.forEach(s=>{const h=hoursBetween(s.start,s.end);totH+=h;perDay[s.day]=(perDay[s.day]||0)+h;});
   let heavyD=null,heavyH=0;Object.keys(perDay).forEach(k=>{if(perDay[k]>heavyH){heavyH=perDay[k];heavyD=+k;}});
   el.innerHTML=`
     <div class="row" style="gap:16px;justify-content:space-between;flex-wrap:wrap">
       <div><div style="font-size:11.5px;opacity:.9;font-weight:800">Σύνολο ώρες/εβδ.</div>
         <div style="font-size:26px;font-weight:900">${totH.toLocaleString('el-GR',{maximumFractionDigits:1})}</div></div>
-      <div style="text-align:right"><div style="font-size:11.5px;opacity:.9;font-weight:800">📚 ${DB.slots.length} μαθήματα</div>
+      <div style="text-align:right"><div style="font-size:11.5px;opacity:.9;font-weight:800">📚 ${all.length} μαθήματα</div>
         <div style="font-size:14px;font-weight:800;margin-top:4px">${heavyD!=null?('Βαρύτερη: '+DAYS[heavyD]+' ('+heavyH.toLocaleString('el-GR',{maximumFractionDigits:1})+'ω)'):'—'}</div></div>
     </div>`;
 }
 function renderWeek(){
   renderWeekStats();
   const bar=document.getElementById('dayBar');
+  const wk=sP();
   bar.innerHTML=[1,2,3,4,5,6,0].map(i=>`
     <div class="dchip ${i===selWeekDay?'sel':''}" data-d="${i}">${DAYS_SHORT[i]}
-    <small>${DB.slots.filter(s=>s.day===i).length} μαθ.</small></div>`).join('');
+    <small>${wk.filter(s=>s.day===i).length} μαθ.</small></div>`).join('');
   bar.querySelectorAll('.dchip').forEach(c=>c.onclick=()=>{selWeekDay=+c.dataset.d;renderWeek();});
-  const slots=DB.slots.filter(s=>s.day===selWeekDay).sort((a,b)=>a.start.localeCompare(b.start));
+  const slots=wk.filter(s=>s.day===selWeekDay).sort((a,b)=>a.start.localeCompare(b.start));
   const c=document.getElementById('weekSlots');
   if(!slots.length)c.innerHTML='<div class="card empty"><div class="big">📭</div>Κενή ημέρα. Πάτα ＋ για προσθήκη.</div>';
   else c.innerHTML=slots.map(s=>slotHTML(s)).join('');
@@ -712,7 +763,7 @@ function renderWeek(){
 
 /* ---------- render: TASKS ---------- */
 function renderTasks(){
-  let list=DB.tasks.slice().sort((a,b)=>{
+  let list=tP().slice().sort((a,b)=>{
     if(a.done!==b.done)return a.done?1:-1;
     return (a.due||'9999').localeCompare(b.due||'9999')||(a.time||'').localeCompare(b.time||'');});
   if(taskF==='pending')list=list.filter(t=>!t.done);
@@ -742,20 +793,21 @@ function renderTasks(){
 /* ---------- render: GRADES ---------- */
 function gradeColor(v){return v>=18?'#16a34a':v>=15?'#0ea5e9':v>=10?'#f59e0b':'#ef4444';}
 function renderGrades(){
-  // subject datalist (από μαθήματα + βαθμούς)
-  const subs=[...new Set([...DB.slots.map(s=>s.name),...DB.grades.map(g=>g.subject)].filter(Boolean))].sort();
+  const gr=gP();
+  // subject datalist (από μαθήματα + βαθμούς του προφίλ)
+  const subs=[...new Set([...sP().map(s=>s.name),...gr.map(g=>g.subject)].filter(Boolean))].sort();
   const dl=document.getElementById('subjectList');if(dl)dl.innerHTML=subs.map(s=>`<option value="${esc(s)}">`).join('');
   const sum=document.getElementById('gradeSummary'), list=document.getElementById('gradeList');
   if(!sum||!list)return;
-  if(!DB.grades.length){
+  if(!gr.length){
     sum.innerHTML=`<div style="font-size:12.5px;opacity:.9;font-weight:700">Γενικός μέσος όρος</div>
       <div style="font-size:34px;font-weight:900">—</div>`;
     list.innerHTML='<div class="card empty"><div class="big">📈</div>Δεν υπάρχουν βαθμοί ακόμη.<br><span style="font-size:12.5px">Πάτα ＋ για προσθήκη.</span></div>';return;
   }
-  const overall=DB.grades.reduce((a,g)=>a+g.value,0)/DB.grades.length;
-  sum.innerHTML=`<div style="font-size:12.5px;opacity:.9;font-weight:700">Γενικός μέσος όρος (${DB.grades.length} βαθμοί)</div>
+  const overall=gr.reduce((a,g)=>a+g.value,0)/gr.length;
+  sum.innerHTML=`<div style="font-size:12.5px;opacity:.9;font-weight:700">Γενικός μέσος όρος (${gr.length} βαθμοί)</div>
     <div style="font-size:34px;font-weight:900">${overall.toLocaleString('el-GR',{maximumFractionDigits:2})}</div>`;
-  const bySub={};DB.grades.forEach(g=>{(bySub[g.subject]=bySub[g.subject]||[]).push(g);});
+  const bySub={};gr.forEach(g=>{(bySub[g.subject]=bySub[g.subject]||[]).push(g);});
   list.innerHTML=Object.keys(bySub).sort().map(sub=>{
     const arr=bySub[sub].slice().sort((a,b)=>(b.date||'').localeCompare(a.date||''));
     const avg=arr.reduce((a,g)=>a+g.value,0)/arr.length;
@@ -789,7 +841,7 @@ function renderHolidays(){
 function renderCosts(){
   const y=costMonth.y,m=costMonth.m;
   document.getElementById('cmLabel').textContent=MONTHS[m]+' '+y;
-  const paid=DB.slots.filter(s=>s.cost>0);
+  const paid=sP().filter(s=>s.cost>0);
   // group by gid (μία εγγραφή/μάθημα με πολλές μέρες)
   const groups={};
   paid.forEach(s=>{const g=groups[s.gid]||(groups[s.gid]={gid:s.gid,name:s.name,type:s.type,cost:s.cost,
@@ -836,7 +888,7 @@ function renderCosts(){
 /* ---------- render: REMINDERS ---------- */
 function renderReminders(){
   const c=document.getElementById('reminderList');
-  const list=DB.reminders.slice().sort((a,b)=>{const na=nextOccur(a),nb=nextOccur(b);
+  const list=rP().slice().sort((a,b)=>{const na=nextOccur(a),nb=nextOccur(b);
     return (na?na.getTime():Infinity)-(nb?nb.getTime():Infinity);});
   if(!list.length){c.innerHTML='<div class="empty" style="padding:26px"><div class="big">🔔</div>Καμία υπενθύμιση. Πάτα ＋.</div>';}
   else c.innerHTML=list.map(r=>{const nx=nextOccur(r);return `
@@ -850,7 +902,7 @@ function renderReminders(){
   document.getElementById('notifState').textContent=
     (Notification&&Notification.permission==='granted')?'Ενεργές ✓':(Notification&&Notification.permission==='denied'?'Αποκλεισμένες':'Ανενεργές');
   document.getElementById('preMin').value=DB.settings.preMin;
-  document.getElementById('studentName').value=DB.settings.name||'';
+  document.getElementById('studentName').value=activeProf()?activeProf().name:'';
 }
 
 /* ---------- MODALS ---------- */
@@ -909,7 +961,7 @@ document.getElementById('slotSave').onclick=()=>{
   const teacher=document.getElementById('slotTeacher').value.trim();
   const cost=parseFloat(document.getElementById('slotCost').value)||0;
   DB.slots=DB.slots.filter(s=>s.gid!==gid);
-  days.forEach(d=>DB.slots.push({id:uid(),gid,type:slotType,name,teacher,cost,color:slotColor,
+  days.forEach(d=>DB.slots.push({id:uid(),gid,pid:DB.activeProfile,type:slotType,name,teacher,cost,color:slotColor,
     day:d.day,start:d.start,end:d.end}));
   save();closeModals();renderAll();toast('Αποθηκεύτηκε ✓');
 };
@@ -935,7 +987,7 @@ document.querySelectorAll('#taskType .chip').forEach(c=>c.onclick=()=>{taskType=
 document.getElementById('taskSave').onclick=()=>{
   const name=document.getElementById('taskName').value.trim();
   if(!name)return toast('Γράψε έναν τίτλο');
-  const o={id:editingTask?editingTask.id:uid(),type:taskType,name,
+  const o={id:editingTask?editingTask.id:uid(),pid:editingTask?editingTask.pid:DB.activeProfile,type:taskType,name,
     subject:document.getElementById('taskSubject').value.trim(),
     due:document.getElementById('taskDate').value,time:document.getElementById('taskTime').value,
     notes:document.getElementById('taskNotes').value.trim(),done:editingTask?editingTask.done:false};
@@ -959,7 +1011,7 @@ function openRem(r){
 document.getElementById('remSave').onclick=()=>{
   const name=document.getElementById('remName').value.trim();
   if(!name)return toast('Γράψε έναν τίτλο');
-  const o={id:editingRem?editingRem.id:uid(),name,date:document.getElementById('remDate').value,
+  const o={id:editingRem?editingRem.id:uid(),pid:editingRem?editingRem.pid:DB.activeProfile,name,date:document.getElementById('remDate').value,
     time:document.getElementById('remTime').value,repeat:document.getElementById('remRepeat').value};
   if(editingRem)DB.reminders=DB.reminders.map(r=>r.id===o.id?o:r);else DB.reminders.push(o);
   save();closeModals();renderAll();toast('Αποθηκεύτηκε ✓');requestNotif();
@@ -1005,7 +1057,7 @@ document.getElementById('gradeSave').onclick=()=>{
   const value=parseFloat(document.getElementById('gradeValue').value);
   if(!subject)return toast('Γράψε μάθημα');
   if(isNaN(value))return toast('Γράψε βαθμό');
-  const o={id:editingGrade?editingGrade.id:uid(),subject,name:document.getElementById('gradeName').value.trim(),
+  const o={id:editingGrade?editingGrade.id:uid(),pid:editingGrade?editingGrade.pid:DB.activeProfile,subject,name:document.getElementById('gradeName').value.trim(),
     value:Math.max(0,Math.min(20,value)),date:document.getElementById('gradeDate').value};
   if(editingGrade)DB.grades=DB.grades.map(g=>g.id===o.id?o:g);else DB.grades.push(o);
   save();closeModals();renderGrades();toast('Αποθηκεύτηκε ✓');};
@@ -1025,9 +1077,58 @@ document.getElementById('holSave').onclick=()=>{
     from:from<=to?from:to,to:from<=to?to:from});
   save();closeModals();renderHolidays();renderCosts();toast('Αποθηκεύτηκε ✓');};
 
+/* ---------- profiles ---------- */
+function renderProfiles(){
+  const c=document.getElementById('profileList');if(!c)return;
+  c.innerHTML=DB.profiles.map(p=>{const on=p.id===DB.activeProfile;
+    return `<div class="linkrow">
+      <div class="row grow" style="gap:10px;cursor:pointer" data-sw="${p.id}">
+        <span style="font-size:20px">${on?'✅':'🎒'}</span>
+        <div style="font-weight:${on?800:600}">${esc(p.name)}</div>
+      </div>
+      <button class="btn sm" data-rn="${p.id}">✎</button>
+      ${DB.profiles.length>1?`<button class="btn sm danger" data-pdel="${p.id}" style="margin-left:6px">✕</button>`:''}
+    </div>`;}).join('');
+  c.querySelectorAll('[data-sw]').forEach(el=>el.onclick=()=>{DB.activeProfile=el.dataset.sw;save();closeModals();renderAll();toast('Προφίλ: '+activeProf().name);});
+  c.querySelectorAll('[data-rn]').forEach(el=>el.onclick=()=>{const p=DB.profiles.find(x=>x.id===el.dataset.rn);
+    const nm=prompt('Νέο όνομα:',p.name);if(nm&&nm.trim()){p.name=nm.trim();save();renderProfiles();renderToday();toast('Μετονομάστηκε');}});
+  c.querySelectorAll('[data-pdel]').forEach(el=>el.onclick=()=>{const id=el.dataset.pdel;
+    const p=DB.profiles.find(x=>x.id===id);
+    if(!confirm('Διαγραφή προφίλ «'+p.name+'» και ΟΛΩΝ των δεδομένων του;'))return;
+    DB.profiles=DB.profiles.filter(x=>x.id!==id);
+    ['slots','tasks','reminders','grades'].forEach(k=>DB[k]=DB[k].filter(x=>x.pid!==id));
+    if(DB.activeProfile===id)DB.activeProfile=DB.profiles[0].id;
+    save();renderProfiles();renderAll();toast('Διαγράφηκε');});
+}
+document.getElementById('profileBtn').onclick=()=>{renderProfiles();document.getElementById('newProfileName').value='';openModal('mProfile');};
+document.getElementById('addProfile').onclick=()=>{
+  const nm=document.getElementById('newProfileName').value.trim();if(!nm)return toast('Γράψε όνομα');
+  const id=uid();DB.profiles.push({id,name:nm,emoji:'🎒'});DB.activeProfile=id;
+  save();closeModals();renderAll();toast('Προστέθηκε: '+nm);};
+
+/* ---------- print / PDF ---------- */
+document.getElementById('printBtn').onclick=()=>{
+  const prof=activeProf(),slots=sP();
+  const days=[1,2,3,4,5,6,0];
+  const cells=days.map(i=>{
+    const list=slots.filter(s=>s.day===i).sort((a,b)=>a.start.localeCompare(b.start));
+    const inner=list.length?list.map(s=>`<div class="pl" style="border-left-color:${s.color}">
+      <div class="pt">${esc(s.name)}</div>
+      <div class="pm">${s.start}–${s.end||''}${s.teacher?' · '+esc(s.teacher):''}</div></div>`).join('')
+      :'<div class="pm">—</div>';
+    return `<td>${inner}</td>`;}).join('');
+  document.getElementById('printSheet').innerHTML=`
+    <h1>Εβδομαδιαίο Πρόγραμμα${prof?(' — '+esc(prof.name)):''}</h1>
+    <div class="psub">Σχολείο · Φροντιστήρια · Δραστηριότητες</div>
+    <table><thead><tr>${days.map(i=>`<th>${DAYS[i]}</th>`).join('')}</tr></thead>
+    <tbody><tr>${cells}</tr></tbody></table>
+    <div class="pfoot">© by Chronis Makris · ${new Date().toLocaleDateString('el-GR')}</div>`;
+  setTimeout(()=>window.print(),80);
+};
+
 /* ---------- copy day ---------- */
 document.getElementById('copyDayBtn').onclick=()=>{
-  const src=DB.slots.filter(s=>s.day===selWeekDay);
+  const src=sP().filter(s=>s.day===selWeekDay);
   if(!src.length)return toast('Η μέρα είναι κενή');
   document.getElementById('copyDayInfo').textContent='Αντιγραφή '+src.length+' μαθημάτων από '+DAYS[selWeekDay]+' σε:';
   const g=document.getElementById('copyDayTargets');
@@ -1037,7 +1138,7 @@ document.getElementById('copyDayBtn').onclick=()=>{
 document.getElementById('copyDaySave').onclick=()=>{
   const targets=[...document.querySelectorAll('#copyDayTargets .chip.sel')].map(c=>+c.dataset.d);
   if(!targets.length)return toast('Διάλεξε μέρα/ες');
-  const src=DB.slots.filter(s=>s.day===selWeekDay);
+  const src=sP().filter(s=>s.day===selWeekDay);
   targets.forEach(day=>{const map={};src.forEach(s=>{
     if(!map[s.gid])map[s.gid]=uid();
     DB.slots.push({...s,id:uid(),gid:map[s.gid],day});});});
@@ -1075,7 +1176,7 @@ document.getElementById('cmNext').onclick=()=>shiftMonth(1);
 
 /* ---------- settings ---------- */
 document.getElementById('preMin').onchange=e=>{DB.settings.preMin=+e.target.value;save();};
-document.getElementById('studentName').onchange=e=>{DB.settings.name=e.target.value.trim();save();renderToday();};
+document.getElementById('studentName').onchange=e=>{const p=activeProf();if(p){p.name=e.target.value.trim()||p.name;}save();renderToday();};
 document.getElementById('themeBtn').onclick=()=>{
   DB.settings.theme=DB.settings.theme==='dark'?'light':'dark';applyTheme();save();};
 function applyTheme(){const d=DB.settings.theme==='dark';
@@ -1133,7 +1234,7 @@ function tick(){
   const now=new Date();const keyDay=now.toISOString().slice(0,10);
   // pre-class reminders
   if(DB.settings.preMin>0){
-    DB.slots.filter(s=>s.day===now.getDay()).forEach(s=>{
+    sP().filter(s=>s.day===now.getDay()).forEach(s=>{
       const [h,m]=s.start.split(':').map(Number);
       const t=new Date();t.setHours(h,m-DB.settings.preMin,0,0);
       const k='slot_'+s.id+'_'+keyDay;
@@ -1142,10 +1243,10 @@ function tick(){
     });
   }
   // reminders + task due
-  DB.reminders.forEach(r=>{const nx=nextOccur(r);if(!nx)return;
+  rP().forEach(r=>{const nx=nextOccur(r);if(!nx)return;
     const k='rem_'+r.id+'_'+nx.getTime();
     if(now>=nx&&now<new Date(nx.getTime()+60000)&&!fired[k]){fired[k]=1;saveFired();notify(r.name,'Υπενθύμιση');}});
-  DB.tasks.filter(t=>!t.done&&t.due).forEach(t=>{
+  tP().filter(t=>!t.done&&t.due).forEach(t=>{
     const due=new Date(t.due+"T"+(t.time||"08:00"));const k='task_'+t.id+'_'+t.due;
     if(now>=due&&now<new Date(due.getTime()+60000)&&!fired[k]){fired[k]=1;saveFired();
       notify(TASK_LABEL[t.type]+': '+t.name,t.subject||'Λήγει τώρα');}});
@@ -1162,11 +1263,12 @@ document.getElementById('expBtn').onclick=()=>{
 document.getElementById('impBtn').onclick=()=>document.getElementById('impFile').click();
 document.getElementById('impFile').onchange=e=>{const f=e.target.files[0];if(!f)return;
   const r=new FileReader();r.onload=()=>{try{const d=JSON.parse(r.result);
-    if(d.slots&&d.tasks){DB=Object.assign(DB,d);save();renderAll();toast('Επαναφορά ✓');}
+    if(d.slots&&d.tasks){DB=Object.assign(DB,d);save();load();applyAccent();applyTheme();renderAll();toast('Επαναφορά ✓');}
     else toast('Μη έγκυρο αρχείο');}catch(x){toast('Σφάλμα αρχείου');}};r.readAsText(f);};
 document.getElementById('wipeBtn').onclick=()=>{if(confirm('Σίγουρα διαγραφή ΟΛΩΝ των δεδομένων;')){
-  DB={slots:[],tasks:[],reminders:[],settings:{preMin:15,name:'',theme:DB.settings.theme}};
-  fired={};saveFired();save();renderAll();toast('Όλα διαγράφηκαν');}};
+  DB={slots:[],tasks:[],reminders:[],grades:[],holidays:[],profiles:[],activeProfile:null,
+    settings:{preMin:15,name:'',theme:DB.settings.theme,accent:DB.settings.accent}};
+  fired={};saveFired();load();applyAccent();applyTheme();renderAll();toast('Όλα διαγράφηκαν');}};
 
 /* ---------- utils ---------- */
 function esc(s){return(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
@@ -1198,12 +1300,20 @@ function seed(){
     {id:uid(),subject:'Μαθηματικά',name:'Διαγώνισμα',value:16.5,date:addDays(-3)},
     {id:uid(),subject:'Ιστορία',name:'Προφορικά',value:19,date:addDays(-5)},
   ];
+  ['slots','tasks','reminders','grades'].forEach(k=>DB[k].forEach(x=>{if(!x.pid)x.pid=DB.activeProfile;}));
   save();
 }
 function addDays(n){const d=new Date();d.setDate(d.getDate()+n);return d.toISOString().slice(0,10);}
 
 /* ---------- boot ---------- */
-load();seed();applyAccent();applyTheme();renderAll();buildPWA();updateFsBtn();
+function handleLaunch(){try{const q=new URLSearchParams(location.search);
+  const v=q.get('v');if(v&&document.querySelector('.tab[data-tab="'+v+'"]'))setTab(v);
+  const a=q.get('a');
+  if(a==='slot'){setTab('week');openSlot(null);}
+  else if(a==='task'){setTab('tasks');openTask(null);}
+  else if(a==='grade'){setTab('tasks');const b=document.querySelector('#tasksSeg .segbtn[data-p="grades"]');if(b)b.click();openGrade(null);}
+}catch(e){}}
+load();seed();applyAccent();applyTheme();renderAll();buildPWA();updateFsBtn();handleLaunch();
 if('Notification'in window&&Notification.permission==='default')
   document.getElementById('notifState').textContent='Ανενεργές';
 tick();

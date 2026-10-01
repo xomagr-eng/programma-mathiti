@@ -355,6 +355,14 @@ hr.sep{border:none;border-top:1px solid var(--line);margin:14px 0}
           <input id="studentName" placeholder="π.χ. Γιώργος" style="width:130px">
         </div>
         <div class="linkrow">
+          <div><div style="font-weight:700">Πρωινή ειδοποίηση «Καλημέρα»</div>
+            <div class="muted" style="font-size:12px">Το σημερινό πρόγραμμα κάθε πρωί</div></div>
+          <div class="row" style="gap:8px">
+            <input type="time" id="morningTime" style="width:94px">
+            <label class="switch"><input type="checkbox" id="morningOn"><span class="slider"></span></label>
+          </div>
+        </div>
+        <div class="linkrow">
           <div><div style="font-weight:700">Πλήρης οθόνη</div>
             <div class="muted" style="font-size:12px">Απόκρυψη μπάρας περιήγησης</div></div>
           <button class="btn sm" id="fsBtn">⛶ Είσοδος</button>
@@ -593,7 +601,10 @@ const ACCENTS=[
   {n:'Μενεξεδί',b:'#7c3aed',b2:'#a78bfa'},
   {n:'Ανθρακί',b:'#334155',b2:'#64748b'}
 ];
-function applyAccent(){const a=ACCENTS[DB.settings.accent||0]||ACCENTS[0];
+function curAccentIdx(){const p=(DB.profiles||[]).find(x=>x.id===DB.activeProfile);
+  return (p&&p.accent!=null)?p.accent:(DB.settings.accent||0);}
+function curAccent(){return ACCENTS[curAccentIdx()]||ACCENTS[0];}
+function applyAccent(){const a=curAccent();
   document.documentElement.style.setProperty('--brand',a.b);
   document.documentElement.style.setProperty('--brand2',a.b2);}
 const LS="progmathiti_v1";
@@ -620,15 +631,17 @@ function money(n){return (Math.round(n*100)/100).toLocaleString('el-GR',{minimum
 /* ---------- storage ---------- */
 function load(){try{const d=JSON.parse(store.get(LS));if(d)DB=Object.assign(DB,d);}catch(e){}
   DB.settings=Object.assign({preMin:15,name:"",theme:"light",accent:0},DB.settings||{});
+  if(!DB.settings.morning)DB.settings.morning={on:false,time:'07:30'};
   if(!DB.grades)DB.grades=[];if(!DB.holidays)DB.holidays=[];
   (DB.slots||[]).forEach(s=>{if(!s.gid)s.gid=s.id;});
   // profiles migration
   if(!DB.profiles||!DB.profiles.length){
     const pid=uid();
-    DB.profiles=[{id:pid,name:DB.settings.name||'Μαθητής',emoji:'🎒'}];
+    DB.profiles=[{id:pid,name:DB.settings.name||'Μαθητής',emoji:'🎒',accent:DB.settings.accent||0}];
     DB.activeProfile=pid;
     ['slots','tasks','reminders','grades'].forEach(k=>(DB[k]||[]).forEach(x=>{if(!x.pid)x.pid=pid;}));
   }
+  DB.profiles.forEach((p,i)=>{if(p.accent==null)p.accent=(DB.settings.accent||0);});
   if(!DB.activeProfile||!DB.profiles.some(p=>p.id===DB.activeProfile))DB.activeProfile=DB.profiles[0].id;}
 function sP(){return DB.slots.filter(s=>s.pid===DB.activeProfile);}
 function tP(){return DB.tasks.filter(t=>t.pid===DB.activeProfile);}
@@ -903,6 +916,8 @@ function renderReminders(){
     (Notification&&Notification.permission==='granted')?'Ενεργές ✓':(Notification&&Notification.permission==='denied'?'Αποκλεισμένες':'Ανενεργές');
   document.getElementById('preMin').value=DB.settings.preMin;
   document.getElementById('studentName').value=activeProf()?activeProf().name:'';
+  document.getElementById('morningOn').checked=!!DB.settings.morning.on;
+  document.getElementById('morningTime').value=DB.settings.morning.time||'07:30';
 }
 
 /* ---------- MODALS ---------- */
@@ -1080,16 +1095,16 @@ document.getElementById('holSave').onclick=()=>{
 /* ---------- profiles ---------- */
 function renderProfiles(){
   const c=document.getElementById('profileList');if(!c)return;
-  c.innerHTML=DB.profiles.map(p=>{const on=p.id===DB.activeProfile;
+  c.innerHTML=DB.profiles.map(p=>{const on=p.id===DB.activeProfile;const col=(ACCENTS[p.accent||0]||ACCENTS[0]).b;
     return `<div class="linkrow">
       <div class="row grow" style="gap:10px;cursor:pointer" data-sw="${p.id}">
-        <span style="font-size:20px">${on?'✅':'🎒'}</span>
+        <span style="width:22px;height:22px;border-radius:50%;background:${col};flex:0 0 22px;display:grid;place-items:center;color:#fff;font-size:12px">${on?'✓':''}</span>
         <div style="font-weight:${on?800:600}">${esc(p.name)}</div>
       </div>
       <button class="btn sm" data-rn="${p.id}">✎</button>
       ${DB.profiles.length>1?`<button class="btn sm danger" data-pdel="${p.id}" style="margin-left:6px">✕</button>`:''}
     </div>`;}).join('');
-  c.querySelectorAll('[data-sw]').forEach(el=>el.onclick=()=>{DB.activeProfile=el.dataset.sw;save();closeModals();renderAll();toast('Προφίλ: '+activeProf().name);});
+  c.querySelectorAll('[data-sw]').forEach(el=>el.onclick=()=>{DB.activeProfile=el.dataset.sw;save();closeModals();applyAccent();applyTheme();renderAll();toast('Προφίλ: '+activeProf().name);});
   c.querySelectorAll('[data-rn]').forEach(el=>el.onclick=()=>{const p=DB.profiles.find(x=>x.id===el.dataset.rn);
     const nm=prompt('Νέο όνομα:',p.name);if(nm&&nm.trim()){p.name=nm.trim();save();renderProfiles();renderToday();toast('Μετονομάστηκε');}});
   c.querySelectorAll('[data-pdel]').forEach(el=>el.onclick=()=>{const id=el.dataset.pdel;
@@ -1103,8 +1118,8 @@ function renderProfiles(){
 document.getElementById('profileBtn').onclick=()=>{renderProfiles();document.getElementById('newProfileName').value='';openModal('mProfile');};
 document.getElementById('addProfile').onclick=()=>{
   const nm=document.getElementById('newProfileName').value.trim();if(!nm)return toast('Γράψε όνομα');
-  const id=uid();DB.profiles.push({id,name:nm,emoji:'🎒'});DB.activeProfile=id;
-  save();closeModals();renderAll();toast('Προστέθηκε: '+nm);};
+  const id=uid();DB.profiles.push({id,name:nm,emoji:'🎒',accent:DB.profiles.length%ACCENTS.length});DB.activeProfile=id;
+  save();closeModals();applyAccent();applyTheme();renderAll();toast('Προστέθηκε: '+nm);};
 
 /* ---------- print / PDF ---------- */
 document.getElementById('printBtn').onclick=()=>{
@@ -1176,18 +1191,20 @@ document.getElementById('cmNext').onclick=()=>shiftMonth(1);
 
 /* ---------- settings ---------- */
 document.getElementById('preMin').onchange=e=>{DB.settings.preMin=+e.target.value;save();};
+document.getElementById('morningOn').onchange=e=>{DB.settings.morning.on=e.target.checked;save();if(e.target.checked)requestNotif();};
+document.getElementById('morningTime').onchange=e=>{DB.settings.morning.time=e.target.value;save();};
 document.getElementById('studentName').onchange=e=>{const p=activeProf();if(p){p.name=e.target.value.trim()||p.name;}save();renderToday();};
 document.getElementById('themeBtn').onclick=()=>{
   DB.settings.theme=DB.settings.theme==='dark'?'light':'dark';applyTheme();save();};
 function applyTheme(){const d=DB.settings.theme==='dark';
   document.documentElement.setAttribute('data-theme',d?'dark':'light');
   document.getElementById('themeBtn').textContent=d?'☀️':'🌙';
-  const a=ACCENTS[DB.settings.accent||0]||ACCENTS[0];
+  const a=curAccent();
   document.querySelector('meta[name=theme-color]').setAttribute('content',d?'#171c2e':a.b);}
 document.getElementById('colorBtn').onclick=()=>{
   const g=document.getElementById('accGrid');
-  g.innerHTML=ACCENTS.map((a,i)=>`<div class="acc ${i===(DB.settings.accent||0)?'sel':''}" data-i="${i}" style="background:linear-gradient(135deg,${a.b},${a.b2})">${a.n}</div>`).join('');
-  g.querySelectorAll('.acc').forEach(el=>el.onclick=()=>{DB.settings.accent=+el.dataset.i;
+  g.innerHTML=ACCENTS.map((a,i)=>`<div class="acc ${i===curAccentIdx()?'sel':''}" data-i="${i}" style="background:linear-gradient(135deg,${a.b},${a.b2})">${a.n}</div>`).join('');
+  g.querySelectorAll('.acc').forEach(el=>el.onclick=()=>{const p=activeProf();if(p)p.accent=+el.dataset.i;else DB.settings.accent=+el.dataset.i;
     applyAccent();applyTheme();save();closeModals();toast('Άλλαξε το χρώμα ✓');});
   openModal('mColor');};
 document.getElementById('bellBtn').onclick=()=>{setTab('more');};
@@ -1250,6 +1267,20 @@ function tick(){
     const due=new Date(t.due+"T"+(t.time||"08:00"));const k='task_'+t.id+'_'+t.due;
     if(now>=due&&now<new Date(due.getTime()+60000)&&!fired[k]){fired[k]=1;saveFired();
       notify(TASK_LABEL[t.type]+': '+t.name,t.subject||'Λήγει τώρα');}});
+  // morning "Καλημέρα" με το σημερινό πρόγραμμα
+  const mg=DB.settings.morning;
+  if(mg&&mg.on&&mg.time){
+    const [mh,mm]=mg.time.split(':').map(Number);
+    const mt=new Date();mt.setHours(mh,mm,0,0);
+    const k='morning_'+keyDay;
+    if(now>=mt&&now<new Date(mt.getTime()+120000)&&!fired[k]){
+      fired[k]=1;saveFired();
+      const slots=sP().filter(s=>s.day===now.getDay()).sort((a,b)=>a.start.localeCompare(b.start));
+      const prof=activeProf();
+      const body=slots.length?slots.map(s=>s.start+' '+s.name).join(' · '):'Καμία υποχρέωση σήμερα 🎉';
+      notify('Καλημέρα'+(prof&&prof.name?(' '+prof.name):'')+'! 🌅',body);
+    }
+  }
   // keep "Τώρα / Επόμενο" fresh όταν είμαστε στο «Σήμερα»
   try{if(document.getElementById('sec-today').classList.contains('active'))renderToday();}catch(e){}
 }
